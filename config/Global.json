@@ -1,0 +1,47 @@
+{
+  "backend": {
+    "host": "http://localhost:8000",
+    "apiVersion": "api/v1",
+    "baseUrl": "http://localhost:8000/api/v1"
+  },
+  "endpoints": {
+    "patients": {
+      "list": "/patient/",
+      "create": "/patient/",
+      "detail": "/patient/{id}/",
+      "update": "/patient/{id}/",
+      "delete": "/patient/{id}/"
+    },
+    "visits": {
+      "list": "/visit/",
+      "create": "/visit/",
+      "detail": "/visit/{id}/",
+      "update": "/visit/{id}/",
+      "delete": "/visit/{id}/",
+      "byPatient": "/visit/?patient={patientId}"
+    },
+    "auth": {
+      "login": "/auth/login/",
+      "logout": "/auth/logout/",
+      "register": "/auth/register/",
+      "profile": "/auth/profile/",
+      "tokenRefresh": "/token/refresh/"
+    },
+    "dashboard": {
+      "stats": "/dashboard/stats/",
+      "recentVisits": "/dashboard/recent-visits/"
+    },
+    "symptomSearch": {
+      "search": "/remedy/",
+      "remedy": "/remedy/"
+    },
+    "medicine": {
+      "list": "/medicine/",
+      "create": "/medicine/"
+    },
+    "doctorProfile": {
+      "me": "/doctorProfile/me/",
+      "update": "/doctorProfile/me/"
+    }
+  }
+}
