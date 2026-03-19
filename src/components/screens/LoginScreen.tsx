@@ -18,10 +18,33 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username && password) {
-      onLogin();
-    } else {
-      setError('Please enter username and password');
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(`${apiConfig.host}/auth/token/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem('access', data.access);
+        localStorage.setItem('refresh', data.refresh);
+        onLogin();
+      } else {
+        setError('Invalid credentials');
+      }
+    } catch (err) {
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
