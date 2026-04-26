@@ -1,8 +1,8 @@
 {
   "backend": {
-    "host": "http://localhost:8000",
+    "host": "https://meditech-be.onrender.com",
     "apiVersion": "api/v1",
-    "baseUrl": "http://localhost:8000/api/v1"
+    "baseUrl": "https://meditech-be.onrender.com/api/v1"
   },
   "endpoints": {
     "patients": {
@@ -28,8 +28,7 @@
       "tokenRefresh": "/token/refresh/"
     },
     "dashboard": {
-      "stats": "/dashboard/stats/",
-      "recentVisits": "/dashboard/recent-visits/"
+      "summary": "/dashboard/"
     },
     "symptomSearch": {
       "search": "/remedy/",

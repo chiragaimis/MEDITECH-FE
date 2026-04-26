@@ -156,7 +156,9 @@ export default function PatientsListScreen({ onNavigate }: PatientsListScreenPro
                         >
                           <Eye size={18} />
                         </button>
-                        <button className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
+                        <button
+                          onClick={() => onNavigate?.(`edit-patient:${patient.id}`)}
+                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg">
                           <Edit size={18} />
                         </button>
                       </div>
