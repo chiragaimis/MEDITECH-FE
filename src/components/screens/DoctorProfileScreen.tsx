@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Award, Edit, X, Camera, CheckCircle, AlertCircle, Briefcase, GraduationCap, FileText, Trash2, UserCircle } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Edit, X, Camera, CheckCircle, AlertCircle, Briefcase, GraduationCap, FileText, Trash2, UserCircle, Calendar, Clock, Star, Shield, Award } from 'lucide-react';
 import DashboardLayout from '../layouts/DashboardLayout';
 import Loader from '../ui/Loader';
 import { doctorProfileApi } from '../../api/doctorProfile';

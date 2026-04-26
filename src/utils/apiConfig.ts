@@ -41,8 +41,7 @@ class ApiConfig {
 
   // Dashboard endpoints
   dashboard = {
-    stats: () => this.config.endpoints.dashboard.stats,
-    recentVisits: () => this.config.endpoints.dashboard.recentVisits
+    summary: () => this.config.endpoints.dashboard.summary
   };
 
   // Doctor Profile endpoints

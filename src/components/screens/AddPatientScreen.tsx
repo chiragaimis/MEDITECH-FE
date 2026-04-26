@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import axiosClient from "../../api/axiosClient";
 import { apiConfig } from "../../utils/apiConfig";
 import Loader from "../ui/Loader";
+import { toast } from "sonner";
 
 interface AddPatientScreenProps {
   onNavigate?: (screen: string) => void;
   screen?: string;
 }
 
-export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) {
+export default function AddPatientScreen({ onNavigate, screen }: AddPatientScreenProps) {
+  const patientId = screen?.split(":")[1] || null;
+  const isEdit = !!patientId;
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -29,20 +32,29 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
 
   const [loading, setLoading] = useState(false);
   const [successData, setSuccessData] = useState<any | null>(null);
+  const phoneErrorTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!patientId) return;
+    axiosClient.get(apiConfig.patients.detail(patientId))
+      .then((res: any) => {
+        const p = res.data;
+        setFormData({ name: p.name || "", phone: p.phone || "", gender: p.gender || "", notes: p.notes || "" });
+      })
+      .catch(console.error);
+  }, [patientId]);
 
   const handleBlur = (field: string) => {
     setTouched({ ...touched, [field]: true });
 
     if (field === "name" && !formData.name) {
       setErrors({ ...errors, name: "Patient name is required" });
-    } else if (field === "phone" && !formData.phone) {
-      setErrors({ ...errors, phone: "Phone number is required" });
     } else if (
       field === "phone" &&
       formData.phone &&
-      !/^\+?\d{10,}$/.test(formData.phone.replace(/[\s-]/g, ""))
+      !/^\d{10}$/.test(formData.phone)
     ) {
-      setErrors({ ...errors, phone: "Please enter a valid phone number" });
+      setErrors({ ...errors, phone: "Please enter a valid 10-digit phone number" });
     }
   };
 
@@ -57,10 +69,10 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.phone) {
+    if (!formData.name) {
       setErrors({
-        name: !formData.name ? "Patient name is required" : "",
-        phone: !formData.phone ? "Phone number is required" : "",
+        name: "Patient name is required",
+        phone: "",
       });
       return;
     }
@@ -69,20 +81,15 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
     setSuccessData(null);
 
     try {
-      const response = await axiosClient.post(apiConfig.patients.create(), formData);
-
-      setSuccessData(response.data);
-
-      setFormData({
-        name: "",
-        phone: "",
-        gender: "",
-        notes: "",
-      });
-
-      setTimeout(() => {
-        onNavigate?.("patient");
-      }, 1500);
+      if (isEdit) {
+        await axiosClient.put(apiConfig.patients.update(patientId!), formData);
+        toast.success("Patient updated successfully!");
+        setTimeout(() => onNavigate?.("patients"), 1000);
+      } else {
+        const response = await axiosClient.post<{ id: string }>(apiConfig.patients.create(), formData);
+        toast.success("Patient added successfully!");
+        setTimeout(() => onNavigate?.(`add-visit:${response.data.id}`), 1000);
+      }
     } catch (error: any) {
       console.error(error);
 
@@ -104,8 +111,8 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
       <div className="w-full">
         <div className="space-y-6">
           <div>
-            <h2 className="text-slate-900 mb-1">Add New Patient</h2>
-            <p className="text-slate-600">Register a new patient in the system</p>
+            <h2 className="text-slate-900 mb-1">{isEdit ? "Edit Patient" : "Add New Patient"}</h2>
+            <p className="text-slate-600">{isEdit ? "Update patient details" : "Register a new patient in the system"}</p>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8">
@@ -135,12 +142,19 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
               {/* Phone */}
               <div>
                 <label className="block text-slate-700 mb-2">
-                  Phone Number <span className="text-[#FF7A66]">*</span>
+                  Phone Number 
                 </label>
                 <input
-                  type="tel"
+                  type="tel" maxLength={10}
                   value={formData.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    if (/[^0-9]/.test(raw)) {
+                      if (phoneErrorTimer.current) clearTimeout(phoneErrorTimer.current);
+                      toast.error("Only numbers are allowed");
+                    }
+                    handleChange("phone", raw.replace(/\D/g, ""));
+                  }}
                   onBlur={() => handleBlur("phone")}
                   className={`w-full px-4 py-2.5 border rounded-xl ${
                     touched.phone && errors.phone
@@ -151,6 +165,9 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
                 />
                 {touched.phone && errors.phone && (
                   <p className="text-red-600 mt-1">{errors.phone}</p>
+                )}
+                {formData.phone.length === 10 && (
+                  <p className="text-green-600 mt-1">✓ Valid phone number</p>
                 )}
               </div>
 
@@ -198,7 +215,7 @@ export default function AddPatientScreen({ onNavigate }: AddPatientScreenProps) 
                   disabled={loading}
                   className="bg-[#1F9CA7] text-white px-6 py-2.5 rounded-xl hover:bg-[#178891] flex items-center gap-2"
                 >
-                  {loading ? <><Loader /> Saving...</> : "Save Patient"}
+                  {loading ? <><Loader /> {isEdit ? "Updating..." : "Saving..."}</> : isEdit ? "Update Patient" : "Save Patient"}
                 </button>
 
                 <button

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { Calendar as CalendarIcon, X, ChevronDown } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Calendar as CalendarIcon, X, Search } from "lucide-react";
 import DashboardLayout from "../layouts/DashboardLayout";
 import axiosClient from "../../api/axiosClient";
 import { apiConfig } from "../../utils/apiConfig";
 import Loader from "../ui/Loader";
+import { toast } from "sonner";
 
 interface AddVisitScreenProps {
   onNavigate?: (screen: string) => void;
@@ -28,6 +29,24 @@ export default function AddVisitScreen({ onNavigate, screen }: AddVisitScreenPro
   const [newMedicine, setNewMedicine] = useState("");
 
   const [selectedPatient, setSelectedPatient] = useState(patientId || "");
+  const [patientSearch, setPatientSearch] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedPatientName, setSelectedPatientName] = useState("");
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredPatients = patients.filter((p) =>
+    `${p.name} ${p.phone}`.toLowerCase().includes(patientSearch.toLowerCase())
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const addMedicine = () => {
     if (newMedicine.trim()) {
@@ -58,10 +77,16 @@ export default function AddVisitScreen({ onNavigate, screen }: AddVisitScreenPro
 
   useEffect(() => {
     fetchPatients();
-
-    // Auto-set today's date
     setVisitDate(new Date().toISOString().slice(0, 10));
   }, []);
+
+  // Auto-set patient name once patients are loaded
+  useEffect(() => {
+    if (patientId && patients.length > 0) {
+      const found = patients.find((p) => p.id === patientId);
+      if (found) setSelectedPatientName(`${found.name}${found.phone ? ` - ${found.phone}` : ""}`);
+    }
+  }, [patients, patientId]);
 
   // --------------------------
   // SUBMIT VISIT TO BACKEND
@@ -72,11 +97,11 @@ export default function AddVisitScreen({ onNavigate, screen }: AddVisitScreenPro
     console.log("Form submitted");
 
     if (!selectedPatient) {
-      alert("Please select a patient");
+      toast.error("Please select a patient");
       return;
     }
     if (!visitDate || !diagnosis || !symptoms) {
-      alert("Please fill required fields!");
+      toast.error("Please fill required fields!");
       return;
     }
 
@@ -97,13 +122,11 @@ export default function AddVisitScreen({ onNavigate, screen }: AddVisitScreenPro
 
       console.log("Visit created successfully:", response.data);
 
-      alert("Visit saved successfully!");
-
-      // Redirect back to patient profile
+      toast.success("Visit saved successfully!");
       onNavigate?.(`patient-profile:${selectedPatient}`);
     } catch (error: any) {
       console.error("Visit Create Error:", error.response?.data || error);
-      alert("Failed to save visit");
+      toast.error("Failed to save visit");
     } finally {
       setSubmitting(false);
     }
@@ -129,26 +152,72 @@ export default function AddVisitScreen({ onNavigate, screen }: AddVisitScreenPro
                   Select Patient <span className="text-[#FF7A66]">*</span>
                 </label>
 
-                <div className="relative">
-                  <select
-                    value={selectedPatient}
-                    onChange={(e) => {
-                      console.log("Patient selected:", e.target.value);
-                      setSelectedPatient(e.target.value);
-                    }}
-                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl"
+                <div className="relative" ref={dropdownRef}>
+                  {/* Search Input */}
+                  <div
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl flex items-center gap-2 cursor-pointer bg-white"
+                    onClick={() => setShowDropdown(true)}
                   >
-                    <option value="">Choose a patient...</option>
+                    <Search size={18} className="text-slate-400 flex-shrink-0" />
+                    {selectedPatient ? (
+                      <span className="flex-1 text-slate-800">{selectedPatientName}</span>
+                    ) : (
+                      <input
+                        type="text"
+                        value={patientSearch}
+                        onChange={(e) => { setPatientSearch(e.target.value); setShowDropdown(true); }}
+                        placeholder="Search patient by name or phone..."
+                        className="flex-1 outline-none bg-transparent text-slate-700 placeholder-slate-400"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    )}
+                    {selectedPatient && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setSelectedPatient(""); setSelectedPatientName(""); setPatientSearch(""); setShowDropdown(true); }}
+                        className="text-slate-400 hover:text-red-500 transition-colors"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
 
-                    {!loadingPatients &&
-                      patients.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} - {p.phone}
-                        </option>
-                      ))}
-                  </select>
-
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  {/* Dropdown List */}
+                  {showDropdown && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                      <div className="px-3 py-2 border-b border-slate-100">
+                        <input
+                          type="text"
+                          value={patientSearch}
+                          onChange={(e) => setPatientSearch(e.target.value)}
+                          placeholder="Type to search..."
+                          className="w-full outline-none text-sm text-slate-700 placeholder-slate-400"
+                          autoFocus
+                        />
+                      </div>
+                      {loadingPatients ? (
+                        <div className="flex justify-center py-4"><Loader /></div>
+                      ) : filteredPatients.length === 0 ? (
+                        <div className="px-4 py-3 text-slate-500 text-sm">No patients found</div>
+                      ) : (
+                        filteredPatients.map((p) => (
+                          <div
+                            key={p.id}
+                            onClick={() => { setSelectedPatient(p.id); setSelectedPatientName(`${p.name} - ${p.phone}`); setShowDropdown(false); setPatientSearch(""); }}
+                            className="px-4 py-3 hover:bg-[#1F9CA7]/10 cursor-pointer flex items-center gap-3 border-b border-slate-50 last:border-0"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-[#1F9CA7]/20 flex items-center justify-center text-[#1F9CA7] font-semibold text-sm flex-shrink-0">
+                              {p.name?.[0]?.toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="text-slate-800 font-medium text-sm">{p.name}</p>
+                              <p className="text-slate-500 text-xs">{p.phone}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -10,6 +10,7 @@ interface Medicine {
   id?: string;
   medicine_name: string;
   full_description: string;
+  dose?: string;
 }
 
 export default function ResultsScreen({ onNavigate }: any) {
@@ -17,6 +18,7 @@ export default function ResultsScreen({ onNavigate }: any) {
   const [loading, setLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [doseFilter, setDoseFilter] = useState("");
   const [newMedicine, setNewMedicine] = useState<Medicine>({
     medicine_name: "",
     full_description: ""
@@ -25,18 +27,32 @@ export default function ResultsScreen({ onNavigate }: any) {
   const [success, setSuccess] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ show: boolean; id: string | null; name: string }>({ show: false, id: null, name: "" });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
-    fetchMedicines();
-  }, []);
+    const timer = setTimeout(() => {
+      setCurrentPage(1);
+      fetchMedicines(1, searchQuery, doseFilter);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery, doseFilter]);
 
-  const fetchMedicines = async () => {
+  useEffect(() => {
+    fetchMedicines(currentPage, searchQuery, doseFilter);
+  }, [currentPage]);
+
+  const fetchMedicines = async (page = 1, search = "", dose = "") => {
     setLoading(true);
     try {
-      const response = await axiosClient.get(Global.endpoints.medicine.list);
+      const params: Record<string, any> = { page };
+      if (search.trim()) params.search = search.trim();
+      if (dose.trim()) params.dose = dose.trim();
+      const response = await axiosClient.get(Global.endpoints.medicine.list, { params });
       const data: any = response.data;
-      const results = data.results || data;
-      setMedicines(Array.isArray(results) ? results : []);
+      setMedicines(Array.isArray(data.results) ? data.results : []);
+      setTotalCount(data.count || 0);
     } catch (err) {
       console.error("Failed to fetch medicines:", err);
       setMedicines([]);
@@ -65,7 +81,7 @@ export default function ResultsScreen({ onNavigate }: any) {
       }
       setNewMedicine({ medicine_name: "", full_description: "" });
       setShowAddForm(false);
-      fetchMedicines();
+      fetchMedicines(currentPage);
     } catch (err) {
       toast.error(editingId ? "Failed to update medicine." : "Failed to add medicine.");
     } finally {
@@ -94,7 +110,7 @@ export default function ResultsScreen({ onNavigate }: any) {
     try {
       await axiosClient.delete(`/medicine/${deleteConfirm.id}/`);
       toast.success("Medicine deleted successfully!");
-      fetchMedicines();
+      fetchMedicines(currentPage);
       setDeleteConfirm({ show: false, id: null, name: "" });
     } catch (err) {
       toast.error("Failed to delete medicine.");
@@ -103,12 +119,82 @@ export default function ResultsScreen({ onNavigate }: any) {
     }
   };
 
-  const filteredMedicines = Array.isArray(medicines) 
-    ? medicines.filter(med => med.medicine_name.toLowerCase().includes(searchQuery.toLowerCase()))
-    : [];
+  const filteredMedicines = Array.isArray(medicines) ? medicines : [];
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
     <>
+      {showAddForm && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
+          <div className="bg-white rounded-2xl p-8 max-w-lg w-full shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-[#1F9CA7]/10 rounded-xl flex items-center justify-center">
+                  <Plus className="text-[#1F9CA7]" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-900">{editingId ? "Edit Medicine" : "Add New Medicine"}</h2>
+                  <p className="text-slate-500 text-sm">Enter medicine details</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setShowAddForm(false); setError(""); setEditingId(null); setNewMedicine({ medicine_name: "", full_description: "" }); }}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <X size={20} className="text-slate-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Medicine Name</label>
+                <input
+                  type="text"
+                  value={newMedicine.medicine_name}
+                  onChange={(e) => setNewMedicine({ ...newMedicine, medicine_name: e.target.value })}
+                  placeholder="e.g., DAMIANA"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1F9CA7] focus:border-[#1F9CA7] outline-none transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Full Description</label>
+                <textarea
+                  rows={6}
+                  value={newMedicine.full_description}
+                  onChange={(e) => setNewMedicine({ ...newMedicine, full_description: e.target.value })}
+                  placeholder="Enter detailed description of the medicine..."
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1F9CA7] focus:border-[#1F9CA7] outline-none transition-all resize-none"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="mb-4 flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
+                <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
+                <p className="text-red-700 font-medium">{error}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddMedicine}
+                disabled={loading}
+                className="flex-1 bg-gradient-to-r from-[#1F9CA7] to-[#178891] text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all"
+              >
+                {loading ? (editingId ? "Updating..." : "Adding...") : (editingId ? "Update Medicine" : "Add Medicine")}
+              </button>
+              <button
+                onClick={() => { setShowAddForm(false); setError(""); setEditingId(null); setNewMedicine({ medicine_name: "", full_description: "" }); }}
+                className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       {deleteConfirm.show && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
           <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
@@ -172,73 +258,6 @@ export default function ResultsScreen({ onNavigate }: any) {
           </div>
         )}
 
-        {/* Add Medicine Form */}
-        {showAddForm && (
-          <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-[#1F9CA7]/10 rounded-xl flex items-center justify-center">
-                <Plus className="text-[#1F9CA7]" size={24} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">{editingId ? "Edit Medicine" : "Add New Medicine"}</h2>
-                <p className="text-slate-600 text-sm">Enter medicine details</p>
-              </div>
-            </div>
-
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Medicine Name</label>
-                <input
-                  type="text"
-                  value={newMedicine.medicine_name}
-                  onChange={(e) => setNewMedicine({ ...newMedicine, medicine_name: e.target.value })}
-                  placeholder="e.g., DAMIANA"
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1F9CA7] focus:border-[#1F9CA7] outline-none transition-all"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Full Description</label>
-                <textarea
-                  rows={6}
-                  value={newMedicine.full_description}
-                  onChange={(e) => setNewMedicine({ ...newMedicine, full_description: e.target.value })}
-                  placeholder="Enter detailed description of the medicine..."
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1F9CA7] focus:border-[#1F9CA7] outline-none transition-all resize-none"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="mb-6 flex items-start gap-3 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
-                <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
-                <p className="text-red-700 font-medium">{error}</p>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleAddMedicine}
-                disabled={loading}
-                className="flex-1 bg-gradient-to-r from-[#1F9CA7] to-[#178891] text-white py-3 rounded-xl font-bold hover:shadow-xl disabled:opacity-50 transition-all"
-              >
-                {loading ? "Adding..." : "Add Medicine"}
-              </button>
-              <button
-                onClick={() => {
-                  setShowAddForm(false);
-                  setError("");
-                  setEditingId(null);
-                  setNewMedicine({ medicine_name: "", full_description: "" });
-                }}
-                className="px-6 py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-all"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Search Bar */}
         <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
           <div className="flex items-center gap-3">
@@ -247,8 +266,15 @@ export default function ResultsScreen({ onNavigate }: any) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search medicines by name..."
+              placeholder="Search by name or description..."
               className="flex-1 px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1F9CA7] focus:border-[#1F9CA7] outline-none transition-all"
+            />
+            <input
+              type="text"
+              value={doseFilter}
+              onChange={(e) => setDoseFilter(e.target.value)}
+              placeholder="Filter by dose (e.g. 3x)"
+              className="w-52 px-4 py-2 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-[#1F9CA7] focus:border-[#1F9CA7] outline-none transition-all"
             />
           </div>
         </div>
@@ -258,7 +284,7 @@ export default function ResultsScreen({ onNavigate }: any) {
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold text-slate-900">
               All Medicines
-              <span className="ml-3 px-4 py-1 bg-[#1F9CA7] text-white rounded-full text-base">{filteredMedicines.length}</span>
+              <span className="ml-3 px-4 py-1 bg-[#1F9CA7] text-white rounded-full text-base">{totalCount}</span>
             </h2>
           </div>
 
@@ -292,7 +318,7 @@ export default function ResultsScreen({ onNavigate }: any) {
                       <tr key={medicine.id || idx} className="border-b border-slate-200 hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4">
                           <div className="w-10 h-10 bg-gradient-to-br from-[#1F9CA7] to-[#178891] rounded-lg flex items-center justify-center text-white font-bold">
-                            {idx + 1}
+                            {(currentPage - 1) * PAGE_SIZE + idx + 1}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -328,6 +354,55 @@ export default function ResultsScreen({ onNavigate }: any) {
                   </tbody>
                 </table>
               </div>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
+                  <p className="text-sm text-slate-600">
+                    Page {currentPage} of {totalPages} &mdash; {totalCount} total
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1 || loading}
+                      className="px-4 py-2 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                    >
+                      Previous
+                    </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                      .reduce<(number | string)[]>((acc, p, i, arr) => {
+                        if (i > 0 && (p as number) - (arr[i - 1] as number) > 1) acc.push("...");
+                        acc.push(p);
+                        return acc;
+                      }, [])
+                      .map((p, i) =>
+                        p === "..." ? (
+                          <span key={`ellipsis-${i}`} className="px-2 text-slate-400">...</span>
+                        ) : (
+                          <button
+                            key={p}
+                            onClick={() => setCurrentPage(p as number)}
+                            disabled={loading}
+                            className={`w-10 h-10 rounded-xl text-sm font-bold transition-all ${
+                              currentPage === p
+                                ? "bg-[#1F9CA7] text-white"
+                                : "border-2 border-slate-200 text-slate-700 hover:bg-slate-50"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        )
+                      )}
+                    <button
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages || loading}
+                      className="px-4 py-2 border-2 border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
